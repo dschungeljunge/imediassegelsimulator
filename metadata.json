@@ -1,0 +1,5 @@
+{
+  "name": "Segel-Simulator",
+  "description": "Eine interaktive Top-Down-Segelsimulation, bei der Sie ein Boot steuern und lernen, wie es auf den Wind reagiert.",
+  "requestFramePermissions": []
+}
