@@ -1,5 +1,6 @@
 import React, { useRef, useEffect } from 'react';
 import { BoatState, Vector2D } from '../types';
+import { WIND_SPEED } from '../constants';
 
 // Ein einzelner Fels im Spielfeld
 export interface Rock {
@@ -10,11 +11,13 @@ export interface Rock {
 interface Props {
   boat: BoatState;
   windSpeed: number;
+  windDirection: number;
   hasSail: boolean;
+  revealMap?: boolean;
   rocks?: Rock[]; // optionale Hindernisse, damit wir SimulationCanvas schrittweise erweitern können
 }
 
-const SimulationCanvas: React.FC<Props> = ({ boat, windSpeed, hasSail, rocks = [] }) => {
+const SimulationCanvas: React.FC<Props> = ({ boat, windSpeed, windDirection, hasSail, revealMap = false, rocks = [] }) => {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const windParticlesRef = useRef<{x: number, y: number, speed: number, len: number}[]>([]);
 
@@ -87,33 +90,44 @@ const SimulationCanvas: React.FC<Props> = ({ boat, windSpeed, hasSail, rocks = [
         windParticlesRef.current.forEach(p => {
             // Move particle absolute L->R
             // Wind speed factor from props
-            const speedFactor = windSpeed / 15; // normalize roughly
-            p.x += p.speed * speedFactor * 0.5;
+            const speedFactor = windSpeed / WIND_SPEED; // 1.0 at level 1, increases with level
+            const animationScale = 0.08; // tuned: slower at start, faster with rising wind
+            const v = p.speed * speedFactor * animationScale;
+            p.x += Math.cos(windDirection) * v;
+            p.y += Math.sin(windDirection) * v;
 
             // Wrap
-            if (p.x > canvas.width) p.x = -p.len;
-            if (p.x < -p.len) p.x = canvas.width;
+            if (p.x > canvas.width + p.len) p.x = -p.len;
+            if (p.x < -p.len) p.x = canvas.width + p.len;
+            if (p.y > canvas.height + p.len) p.y = -p.len;
+            if (p.y < -p.len) p.y = canvas.height + p.len;
             
             // Y jitter slightly
             p.y += (Math.random() - 0.5) * 0.5;
 
             ctx.beginPath();
             ctx.moveTo(p.x, p.y);
-            ctx.lineTo(p.x + p.len, p.y);
+            ctx.lineTo(
+                p.x + Math.cos(windDirection) * p.len,
+                p.y + Math.sin(windDirection) * p.len
+            );
             ctx.lineWidth = 2;
             ctx.stroke();
         });
 
         // Draw Rocks (Felsen) als feste Hindernisse im Spielfeld
-        // WICHTIG: nur im Sichtkreis um das Boot zeichnen, damit Felsen im Nebel wirklich „unsichtbar“ sind
+        // Standard: nur im Sichtkreis um das Boot zeichnen, damit Felsen im Nebel wirklich „unsichtbar“ sind.
+        // Mit revealMap: kompletter Nebel weg + alle Felsen sichtbar.
         const fogRadius = 260; // Basis-Sicht-Radius (wird auch für den Nebel genutzt)
         const rockVisibleRadius = fogRadius * 0.9;
 
         if (rocks.length > 0) {
             ctx.save();
-            ctx.beginPath();
-            ctx.arc(boat.position.x, boat.position.y, rockVisibleRadius, 0, Math.PI * 2);
-            ctx.clip();
+            if (!revealMap) {
+                ctx.beginPath();
+                ctx.arc(boat.position.x, boat.position.y, rockVisibleRadius, 0, Math.PI * 2);
+                ctx.clip();
+            }
 
             ctx.fillStyle = '#4b5563'; // Slate 600
             ctx.strokeStyle = '#020617'; // Slate 950
@@ -233,20 +247,22 @@ const SimulationCanvas: React.FC<Props> = ({ boat, windSpeed, hasSail, rocks = [
 
         ctx.restore(); // End Boat
 
-        // Fog of War / Nebel: Umgebung wird abgedunkelt, das Zentrum um das Boot bleibt klar,
-        // Felsen ausserhalb des Sichtkreises sind ohnehin nicht gezeichnet.
-        ctx.save();
-        const fogGradient = ctx.createRadialGradient(
-            boat.position.x, boat.position.y, fogRadius * 0.3,
-            boat.position.x, boat.position.y, fogRadius
-        );
-        fogGradient.addColorStop(0, 'rgba(15, 23, 42, 0.0)');   // direkt um das Boot: keine Abdunkelung
-        fogGradient.addColorStop(0.6, 'rgba(15, 23, 42, 0.35)'); // mittlerer Bereich: etwas dunkler
-        fogGradient.addColorStop(1, 'rgba(15, 23, 42, 0.85)');   // Rand: sehr dunkel
+        // Fog of War / Nebel: Umgebung wird abgedunkelt, das Zentrum um das Boot bleibt klar.
+        // revealMap: Nebel komplett aus.
+        if (!revealMap) {
+            ctx.save();
+            const fogGradient = ctx.createRadialGradient(
+                boat.position.x, boat.position.y, fogRadius * 0.3,
+                boat.position.x, boat.position.y, fogRadius
+            );
+            fogGradient.addColorStop(0, 'rgba(15, 23, 42, 0.0)');   // direkt um das Boot: keine Abdunkelung
+            fogGradient.addColorStop(0.6, 'rgba(15, 23, 42, 0.35)'); // mittlerer Bereich: etwas dunkler
+            fogGradient.addColorStop(1, 'rgba(15, 23, 42, 0.85)');   // Rand: sehr dunkel
 
-        ctx.fillStyle = fogGradient;
-        ctx.fillRect(0, 0, canvas.width, canvas.height);
-        ctx.restore();
+            ctx.fillStyle = fogGradient;
+            ctx.fillRect(0, 0, canvas.width, canvas.height);
+            ctx.restore();
+        }
     };
 
     let animationFrameId: number;
@@ -257,7 +273,7 @@ const SimulationCanvas: React.FC<Props> = ({ boat, windSpeed, hasSail, rocks = [
     loop();
 
     return () => cancelAnimationFrame(animationFrameId);
-  }, [boat, windSpeed, hasSail]);
+  }, [boat, windSpeed, windDirection, hasSail, revealMap]);
 
   return <canvas ref={canvasRef} className="absolute inset-0 block" />;
 };

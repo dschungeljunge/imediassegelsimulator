@@ -1,5 +1,5 @@
 import { BoatState, WindState } from '../types';
-import { MAX_BOAT_SPEED, NO_GO_ZONE_DEG, degToRad, normalizeAngle } from '../constants';
+import { MAX_BOAT_SPEED, NO_GO_ZONE_DEG, WIND_SPEED, degToRad, normalizeAngle } from '../constants';
 
 /**
  * Helper to determine if the boat is in the No-Go Zone (dead angle).
@@ -52,7 +52,12 @@ export const calculateTargetSpeed = (heading: number, wind: WindState): number =
       performance = 0.3 + (t * 0.7);
   }
 
-  return performance * MAX_BOAT_SPEED;
+  // Make speed meaningfully scale with wind strength, but keep it bounded.
+  // Level 1 windSpeed is WIND_SPEED, higher levels increase it in App.tsx.
+  const windFactorRaw = wind.speed / WIND_SPEED; // 1.0 at level 1
+  const windFactor = Math.max(0.6, Math.min(2.2, windFactorRaw));
+
+  return performance * MAX_BOAT_SPEED * windFactor;
 };
 
 /**

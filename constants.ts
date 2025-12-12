@@ -1,5 +1,5 @@
 export const WIND_SPEED = 15; // Knots approx
-export const MAX_BOAT_SPEED = 8;
+export const MAX_BOAT_SPEED = 5;
 export const TURN_RATE = 0.04;
 export const ACCELERATION = 0.05;
 export const DRAG = 0.02;
